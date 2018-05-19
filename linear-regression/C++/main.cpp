@@ -1,12 +1,16 @@
 #include "linear_regression.h"
+#include <cstdlib>
 
 int main() {
-    dataset ds('1');
+    dataset ds('+');
     vector<vector<double> > trainSet = ds.getTrainSet();
     vector<double> trainValues = ds.getTrainValues();
-    //vector<vector<double> > testSet = ds.getTestSet();
+    dataset test('*');
+    vector<vector<double> > testSet = test.getTestSet();
     //vector<double> testValues = ds.getTestValues();
-    linearRegression LR(trainSet, trainValues, 1000.0);
+    linearRegression LR(trainSet, trainValues, 0.1, testSet);
+
+    system("pause");
 
     return 0;
 }

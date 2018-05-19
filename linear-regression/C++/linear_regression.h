@@ -2,6 +2,7 @@
 #define _LINEAR_REGRESSION_
 
 #include <vector>
+#include <algorithm>
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -10,7 +11,8 @@
 using namespace std;
 
 #define VAR_NUM 384
-#define SAMPLE_NUM 50000
+#define SAMPLE_NUM 5000
+#define ALL_SAMPLE_NUM 25000
 #define RATE_DESCENT_SCALE 2.0
 
 class dataset {
@@ -32,33 +34,55 @@ public:
 dataset::dataset(char which) {
     whichSetForTest = which;
 
-    for (char c = '1'; c <= '5'; ++c) {
-        string filename("5_folds_data/part");
-        filename.push_back(c);
-        filename += ".csv";
-        ifstream in(filename);
-
-        if (c != whichSetForTest) {
-            for (int i = 0; i < SAMPLE_NUM; ++i) {
-                vector<double> temp(VAR_NUM);
-                double val;
-                for (int j = 0; j < VAR_NUM; ++j) { in >> temp[j]; }
-                in >> val;
-                trainSet.push_back(temp);
-                trainValues.push_back(val);
-            }
-        } else {
-            for (int i = 0; i < SAMPLE_NUM; ++i) {
-                vector<double> temp(VAR_NUM);
-                double val;
-                for (int j = 0; j < VAR_NUM; ++j) { in >> temp[j]; }
-                in >> val;
-                testSet.push_back(temp);
-                testValues.push_back(val);
-            }
+    if (whichSetForTest == '+') {
+        ifstream in("newTrain.csv");
+        for (int i = 0; i < ALL_SAMPLE_NUM; ++i) {
+            vector<double> temp(VAR_NUM);
+            double val;
+            for (int j = 0; j < VAR_NUM; ++j) { in >> temp[j]; }
+            in >> val;
+            trainSet.push_back(temp);
+            trainValues.push_back(val);
         }
-
         in.close();
+    } else if (whichSetForTest == '*') {
+        ifstream in("newTest.csv");
+        for (int i = 0; i < ALL_SAMPLE_NUM; ++i) {
+            vector<double> temp(VAR_NUM);
+            double val;
+            for (int j = 0; j < VAR_NUM; ++j) { in >> temp[j]; }
+            testSet.push_back(temp);
+        }
+        in.close();
+    } else {
+        for (char c = '1'; c <= '5'; ++c) {
+            string filename("5_folds_data/part");
+            filename.push_back(c);
+            filename += ".csv";
+            ifstream in(filename);
+
+            if (c != whichSetForTest) {
+                for (int i = 0; i < SAMPLE_NUM; ++i) {
+                    vector<double> temp(VAR_NUM);
+                    double val;
+                    for (int j = 0; j < VAR_NUM; ++j) { in >> temp[j]; }
+                    in >> val;
+                    trainSet.push_back(temp);
+                    trainValues.push_back(val);
+                }
+            } else {
+                for (int i = 0; i < SAMPLE_NUM; ++i) {
+                    vector<double> temp(VAR_NUM);
+                    double val;
+                    for (int j = 0; j < VAR_NUM; ++j) { in >> temp[j]; }
+                    in >> val;
+                    testSet.push_back(temp);
+                    testValues.push_back(val);
+                }
+            }
+
+            in.close();
+        }
     }
 }
 
@@ -73,58 +97,64 @@ private:
     void findBestTheta(vector<vector<double> >& trainSet, vector<double>& trainValues);
     void updateTheta(vector<vector<double> >& trainSet, vector<double>& trainValues);
     double calMSRE(vector<vector<double> >& trainSet, vector<double>& trainValues);
+    void predict(vector<vector<double> >& testSet);
+    void saveResult(vector<double>& result);
 
 public:
-    linearRegression(vector<vector<double> >& trainSet, vector<double>& trainValues, double _lambda);
+    linearRegression(vector<vector<double> >& trainSet, vector<double>& trainValues, double _lambda, vector<vector<double> >& testSet);
+    vector<double>& getTheta() { return theta; }
+    double getConstTheta() { return constTheta; }
 };
 
-linearRegression::linearRegression(vector<vector<double> >& trainSet, vector<double>& trainValues, double _lambda) {
-    learningRate = 0.02;
+linearRegression::linearRegression(vector<vector<double> >& trainSet, vector<double>& trainValues, double _lambda, vector<vector<double> >& testSet) {
+    learningRate = 0.001;
     constTheta = 0.0;
     lambda = _lambda;
     theta = vector<double>(VAR_NUM, 0.0);
     predictValues = vector<double>(trainSet.size(), 0.0);
 
     findBestTheta(trainSet, trainValues);
+    predict(testSet);
 }
 
 void linearRegression::findBestTheta(vector<vector<double> >& trainSet, vector<double>& trainValues) {
-    double lastMSRE = calMSRE(trainSet, trainValues);
+    double minMSRE = calMSRE(trainSet, trainValues);
     
-    cout << "for alpha = " << learningRate << ", MSRE = " << lastMSRE << endl;
+    cout << "for alpha = " << learningRate << ", cost value = " << minMSRE << endl;
 
-    int cnt = 0;
-    while (true) {
+    while (learningRate > 1e-8) {
+        vector<double> originalTheta(theta);
+        double originalConstTheta = constTheta;
         updateTheta(trainSet, trainValues);
         double curMSRE = calMSRE(trainSet, trainValues);
 
-        cout << "for alpha = " << learningRate << ", MSRE = " << curMSRE << endl;
-        
-        if (curMSRE > lastMSRE || fabs(curMSRE - lastMSRE) < 1e-10) { learningRate /= RATE_DESCENT_SCALE; }
-        if (learningRate < 1e-6) { break; }
+        if (curMSRE > minMSRE || fabs(curMSRE - minMSRE) < 1e-5) {
+            copy(originalTheta.begin(), originalTheta.end(), theta.begin());
+            constTheta = originalConstTheta;
+            curMSRE = calMSRE(trainSet, trainValues);
+            learningRate /= RATE_DESCENT_SCALE;
+        } else { minMSRE = curMSRE; }
 
-        lastMSRE = curMSRE;
-        cnt++;
+        cout << "for alpha = " << learningRate << ", cost value = " << curMSRE << endl;
     }
 }
 
 void linearRegression::updateTheta(vector<vector<double> >& trainSet, vector<double>& trainValues) {
-    vector<double> originalTheta(theta);
     for (int k = 0; k < theta.size(); ++k) {
         double newValue = 0.0;
         for (int i = 0; i < trainSet.size(); ++i) {
             newValue += (1.0 / (double)trainSet.size()) * (predictValues[i] - trainValues[i]) * trainSet[i][k];
         }
-        newValue += (1.0 / (double)VAR_NUM) * originalTheta[k];
+        newValue += (lambda / (double)trainSet.size()) * theta[k];
         theta[k] = theta[k] - learningRate * newValue;
     }
 
     double newValue = 0.0;
     for (int i = 0; i < trainSet.size(); ++i) {
-        newValue += (1.0 / (double)trainSet.size()) * (predictValues[i] - trainValues[i]);
+        newValue += (1.0 / (double)trainSet.size()) * (predictValues[i] - trainValues[i]) * 1.0;
     }
+    newValue += (lambda / (double)trainSet.size()) * constTheta;
     constTheta = constTheta - learningRate * newValue;
-
 }
 
 double linearRegression::calMSRE(vector<vector<double> >& trainSet, vector<double>& trainValues) {
@@ -136,9 +166,31 @@ double linearRegression::calMSRE(vector<vector<double> >& trainSet, vector<doubl
         predictValues[i] = predictValue;
         MSRE += (1.0 / (2.0 * (double)trainSet.size())) * (predictValue - trainValues[i]) * (predictValue - trainValues[i]);
     }
-    for (int j = 0; j < VAR_NUM; ++j) { MSRE += (lambda / (2.0 * double(VAR_NUM))) * theta[j] * theta[j]; }
+    for (int j = 0; j < VAR_NUM; ++j) { MSRE += (lambda / (2.0 * (double)trainSet.size())) * theta[j] * theta[j]; }
+    MSRE += (lambda / (2.0 * (double)trainSet.size())) * constTheta * constTheta;
 
     return MSRE;
+}
+
+void linearRegression::predict(vector<vector<double> >& testSet) {
+    vector<double> results(testSet.size(), constTheta);
+    for (int i = 0; i < testSet.size(); ++i) {
+        for (int j = 0; j < VAR_NUM; ++j) {
+            results[i] += theta[j] * testSet[i][j];
+        }
+    }
+
+    saveResult(results);
+}
+
+void linearRegression::saveResult(vector<double>& result) {
+    cout << "saving results..." << endl; 
+    ofstream out("result.csv");
+    out << "id," << "reference" << endl;
+    for (int i = 0; i < result.size(); ++i) {
+        out << i << "," << result[i] << endl;
+    }
+    out.close();
 }
 
 #endif
