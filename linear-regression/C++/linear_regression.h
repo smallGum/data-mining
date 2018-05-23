@@ -107,7 +107,7 @@ public:
 };
 
 linearRegression::linearRegression(vector<vector<double> >& trainSet, vector<double>& trainValues, double _lambda, vector<vector<double> >& testSet) {
-    learningRate = 0.001;
+    learningRate = 0.1;
     constTheta = 0.0;
     lambda = _lambda;
     theta = vector<double>(VAR_NUM, 0.0);
@@ -122,20 +122,27 @@ void linearRegression::findBestTheta(vector<vector<double> >& trainSet, vector<d
     
     cout << "for alpha = " << learningRate << ", cost value = " << minMSRE << endl;
 
-    while (learningRate > 1e-8) {
+    int cnt = 0;
+    while (cnt < 20000) {
         vector<double> originalTheta(theta);
         double originalConstTheta = constTheta;
         updateTheta(trainSet, trainValues);
         double curMSRE = calMSRE(trainSet, trainValues);
 
-        if (curMSRE > minMSRE || fabs(curMSRE - minMSRE) < 1e-5) {
+        if (cnt == 1000) {
             copy(originalTheta.begin(), originalTheta.end(), theta.begin());
             constTheta = originalConstTheta;
             curMSRE = calMSRE(trainSet, trainValues);
-            learningRate /= RATE_DESCENT_SCALE;
+            learningRate = 0.01;
+        } else if (cnt == 10000) {
+            copy(originalTheta.begin(), originalTheta.end(), theta.begin());
+            constTheta = originalConstTheta;
+            curMSRE = calMSRE(trainSet, trainValues);
+            learningRate = 0.001;
         } else { minMSRE = curMSRE; }
 
         cout << "for alpha = " << learningRate << ", cost value = " << curMSRE << endl;
+        cnt++;
     }
 }
 
